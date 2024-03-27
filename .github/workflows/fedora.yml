@@ -1,0 +1,55 @@
+name: Build
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+
+jobs:
+  Fedora:
+    name: Fedora
+    runs-on: ubuntu-22.04
+    container: fedora:rawhide
+
+    steps:
+      - uses: actions/checkout@v4
+      - name: Copy LFS Data
+        uses: ./source/.github/actions/lfs-copy
+        with:
+          lfs_sha: ${{ inputs.lfs_sha}}
+          workflow_label: 'consumer'
+      - name: Install build dependencies
+        run: |
+          dnf install -y gcc-c++ cmake ninja-build json-devel cxxopts-devel \
+            vtk-devel lapack-devel assimp-devel draco-devel draco-static \
+            alembic-devel opencascade-devel imath-devel help2man \
+            xorg-x11-drv-dummy mesa-dri-drivers xorg-x11-server-Xvfb \
+            python3-devel python3-pybind11 java-devel
+      - name: build
+        run: |
+            cmake . -B build \
+                -GNinja \
+                -DCMAKE_BUILD_TYPE=Release \
+                -DF3D_PLUGINS_STATIC_BUILD=OFF \
+                -DF3D_USE_EXTERNAL_CXXOPTS=ON \
+                -DF3D_USE_EXTERNAL_NLOHMANN_JSON=ON \
+                -DF3D_LINUX_INSTALL_DEFAULT_CONFIGURATION_FILE_IN_PREFIX=ON \
+                -DF3D_LINUX_GENERATE_MAN=ON \
+                -DF3D_MODULE_RAYTRACING=OFF \
+                -DF3D_MODULE_EXTERNAL_RENDERING=OFF \
+                -DF3D_PLUGIN_BUILD_ALEMBIC=ON \
+                -DF3D_PLUGIN_BUILD_ASSIMP=ON \
+                -DF3D_PLUGIN_BUILD_DRACO=ON \
+                -DF3D_PLUGIN_BUILD_EXODUS=ON \
+                -DF3D_PLUGIN_BUILD_OCCT=ON \
+                -DF3D_PLUGIN_BUILD_USD=OFF \
+                -DF3D_PLUGIN_OCCT_COLORING_SUPPORT=ON \
+                -DF3D_PLUGIN_BUILD_VDB=OFF \
+                -DF3D_BINDINGS_PYTHON=ON \
+                -DF3D_BINDINGS_JAVA=ON \
+                -DBUILD_TESTING=ON
+            cmake --build build -j2
+      - name: test
+        run: |
+          xvfb-run ctest --test-dir build -j2
